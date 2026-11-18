@@ -17,7 +17,7 @@
   .step .idx{position:absolute;top:-11px;left:20px;background:#3b6ef0;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:20px}
   .step h2{font-size:15px;margin:6px 0 8px;font-weight:600}
   .step p{margin:0 0 16px;color:#98a1b3;font-size:14px}
-  .btn{display:inline-block;background:#20262f;color:#e8eaf0;border:1px solid #313a48;border-radius:10px;padding:10px 18px;text-decoration:none;font-size:14px;cursor:pointer;transition:.15s}
+  .btn{display:inline-block;background:#20262f;color:#e8eaf0;border:1px solid #313a48;border-radius:10px;padding:10px 18px;text-decoration:none;font-size:14px;cursor:pointer;transition:.15s;user-select:none}
   .btn:hover{background:#28303b;border-color:#3d4757}
   .btn.primary{background:#3b6ef0;border-color:#3b6ef0;color:#fff}
   .btn.primary:hover{background:#4b7bf5}
@@ -41,6 +41,12 @@
   a{color:#6f9bff;text-decoration:none}
   a:hover{text-decoration:underline}
   .ok{color:#4bd07f}
+  .err{color:#e05252}
+  .status{margin-top:14px;padding:10px 14px;border-radius:8px;font-size:13px;display:none}
+  .status.show{display:block}
+  .status.info{background:#0e1a2e;border:1px solid #1a3058;color:#6f9bff}
+  .status.error{background:#2a1010;border:1px solid #4a1818;color:#e05252}
+  .status.success{background:#0e2318;border:1px solid #235c3a;color:#4bd07f}
 </style>
 </head>
 <body>
@@ -52,16 +58,17 @@
   <div class="step">
     <div class="idx">第一步</div>
     <h2>登录谷歌账号</h2>
-    <p>用要开的那个号。登录完回来，这个页面会自动识别。</p>
-    <a class="btn" href="https://accounts.google.com/" target="_blank" rel="noopener">去登录</a>
-    <span id="loginState" style="margin-left:12px;font-size:13px;color:#6d768a">未检测</span>
+    <p>用要开的那个号。登录完回来，这个页面会自动识别。<br>
+    <span style="color:#6d768a;font-size:12px">提示：如果从本地文件打开此页面，「去登录」可能被浏览器拦截。请改用<a href="https://gylive.github.io/google-ultra/web/" target="_blank">在线版</a>，或者右键「去登录」→ 在新标签页中打开。</span></p>
+    <a class="btn" id="loginBtn" href="javascript:void(0)">去登录</a>
+    <span id="loginState" style="margin-left:12px;font-size:13px;color:#6d768a">检测中…</span>
   </div>
 
   <div class="step">
     <div class="idx">第二步</div>
     <h2>绑一张卡</h2>
     <p>卡里放 1 美元就行，试用期间不扣。已经绑过就跳过。</p>
-    <a class="btn" href="https://pay.google.com/gp/w/u/0/home/paymentmethods" target="_blank" rel="noopener">去绑卡</a>
+    <a class="btn" id="cardBtn" href="javascript:void(0)">去绑卡</a>
   </div>
 
   <div class="step">
@@ -93,9 +100,12 @@
     </div>
   </div>
 
+  <div id="statusBox" class="status"></div>
+
   <div class="note">
     <b>开完记得取消自动续费</b>。路径：Play 商店 → 头像 → 付款和订阅 → 订阅 → Google One → 取消。取消后已经用掉的时间不受影响。<br><br>
     <b>出现 400</b>：说明这个浏览器跟链接里的指纹对不上。先勾上「兼容模式」再点一次；还不行把链接复制到你要开通账号所在的浏览器里打开。<br><br>
+    <b>出现「伺服器端发生错误」</b>：通常是 Google 侧的临时问题，等几分钟再试。如果持续出现，试试换 Chrome 浏览器、使用无痕模式、或勾上兼容模式。<br><br>
     <b>提示「不符合免费试用条件」</b>：这个号没资格，换一个。需要已绑卡且当前没有任何 Google One 订阅，一个号基本只有一次机会。
   </div>
 <div style="color:#4d5566;font-size:12px;margin-top:26px;line-height:1.8">本项目仅用于技术研究与学习交流，不提供账号或代开服务。使用产生的任何后果由使用者自行承担。</div>
@@ -111,35 +121,28 @@ const OFFERS = {
   "30tb": { sku: "g1.play.ai.pro",  token: "AYrTWi7nBQ2Zn0z4s+QJOwg9kQRwH3+z+HXpzRqw9IIU4/C48vPvjH32Bub8SHrWq3YX+yI4g1wJgviYiLCobJNqc9DqRd9WZnDdaQ==" }
 };
 
-/* 把 / - ; ( ) , : 换成客户端内部用的两字节编码 */
 function enc(s) {
   return s.replace(/\//g, "2f").replace(/-/g, "2d").replace(/;/g, "3b")
           .replace(/\(/g, "28").replace(/\)/g, "29").replace(/,/g, "2c")
           .replace(/:/g, "3a");
 }
 
-/* 用当前浏览器的真实信息重建指纹 */
 function buildFingerprint() {
   try {
     const raw = atob(FP_TEMPLATE);
     const ua = navigator.userAgent;
     const plat = /Mac/.test(navigator.platform) ? "MacIntel"
                : /Win/.test(navigator.platform) ? "Win32" : navigator.platform || "Linux x86_64";
-    const tz = new Date(0).toString();              // Wed Dec 31 1969 16:00:00 GMT-0800 (Pacific Standard Time)
+    const tz = new Date(0).toString();
     const lang = navigator.language || "en";
 
     let s = raw;
-    // 明文 UA（尾部）
     s = s.split("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36").join(ua);
-    // 摘要里的平台
     s = s.split('\\"Win32').join('\\"' + plat);
-    // 摘要里的 UA（已编码）
     s = s.split("5.0 28Windows NT 10.03b Win643b x6429 AppleWebKit2f537.36 28KHTML2c like Gecko29 Chrome2f125.0.0.0 Safari2f537.36")
          .join(enc(ua.replace(/^Mozilla\//, "")));
-    // 时区串
     s = s.split("Wed Dec 31 1969 193a003a00 GMT2d0500 28Eastern Standard Time29")
          .join(enc(tz));
-    // 语言
     s = s.split('"en",1,1').join('"' + lang + '",1,1');
 
     return btoa(s);
@@ -167,9 +170,35 @@ function buildUrl(key, legacy) {
     + encodeURIComponent(JSON.stringify(ear)) + gapi;
 }
 
+function showStatus(msg, type) {
+  const box = document.getElementById("statusBox");
+  box.textContent = msg;
+  box.className = "status show " + type;
+  if (type !== "error") setTimeout(() => { box.className = "status"; }, 5000);
+}
+
+function safeOpen(url) {
+  const w = window.open(url, "_blank");
+  if (!w || w.closed) {
+    showStatus("弹窗被浏览器拦截了。请允许此页面的弹窗，或右键链接「在新标签页中打开」。如果是从本地文件打开的，请改用在线版。", "error");
+    return false;
+  }
+  return true;
+}
+
 /* ---------- 交互 ---------- */
 let lastUrl = "";
 const panel = document.getElementById("panel");
+
+document.getElementById("loginBtn").addEventListener("click", function(e) {
+  e.preventDefault();
+  safeOpen("https://accounts.google.com/");
+});
+
+document.getElementById("cardBtn").addEventListener("click", function(e) {
+  e.preventDefault();
+  safeOpen("https://pay.google.com/gp/w/u/0/home/paymentmethods");
+});
 
 document.querySelectorAll(".plan").forEach(el => {
   el.addEventListener("click", () => {
@@ -180,33 +209,49 @@ document.querySelectorAll(".plan").forEach(el => {
       (el.dataset.key === "20tb" ? "Ultra 20 TB · 12 个月" : "Ultra 30 TB · 1 个月")
       + (legacy ? "（兼容模式）" : "（已按你的浏览器生成指纹）");
     panel.classList.add("show");
-    window.open(lastUrl, "_blank");
+
+    if (!safeOpen(lastUrl)) {
+      showStatus("链接已生成但弹窗被拦截。请点下方「打开」按钮，或复制链接到新标签页打开。", "error");
+    }
   });
 });
 
 document.getElementById("open").addEventListener("click", () => {
-  if (lastUrl) window.open(lastUrl, "_blank");
+  if (lastUrl) safeOpen(lastUrl);
 });
 
 document.getElementById("copy").addEventListener("click", () => {
   const btn = document.getElementById("copy");
+  if (!lastUrl) return;
   navigator.clipboard.writeText(lastUrl).then(() => {
     btn.textContent = "已复制";
-    setTimeout(() => { btn.textContent = "复制链接"; }, 1500);
+    showStatus("链接已复制。如果弹窗打不开，请在新标签页粘贴打开。", "info");
+    setTimeout(() => { btn.textContent = "复制链接"; }, 2000);
+  }).catch(() => {
+    prompt("复制下面的链接：", lastUrl);
   });
 });
 
-/* 顺手探测一下有没有登录过谷歌 */
+/* 探测登录状态 */
 (function probe() {
   const el = document.getElementById("loginState");
   fetch("https://accounts.google.com/ListAccounts?gpsia=1&source=ChromiumBrowser&json=standard", { credentials: "include" })
     .then(r => r.json())
     .then(d => {
       const n = (d && d[1] && d[1].length) || 0;
-      if (n > 0) el.innerHTML = '<span class="ok">已登录</span>';
-      else el.textContent = "未检测到登录";
+      if (n > 0) {
+        el.innerHTML = '<span class="ok">已登录</span>';
+      } else {
+        el.textContent = "未检测到登录";
+      }
     })
-    .catch(() => { el.textContent = "未检测到登录"; });
+    .catch(() => {
+      if (location.protocol === "file:") {
+        el.innerHTML = '无法检测（本地文件模式）<br><span style="font-size:11px;color:#555">建议使用<a href="https://gylive.github.io/google-ultra/web/">在线版</a></span>';
+      } else {
+        el.textContent = "未检测到登录";
+      }
+    });
 })();
 </script>
 </body>

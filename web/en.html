@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow">
@@ -17,7 +17,7 @@
   .step .idx{position:absolute;top:-11px;left:20px;background:#3b6ef0;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:20px}
   .step h2{font-size:15px;margin:6px 0 8px;font-weight:600}
   .step p{margin:0 0 16px;color:#98a1b3;font-size:14px}
-  .btn{display:inline-block;background:#20262f;color:#e8eaf0;border:1px solid #313a48;border-radius:10px;padding:10px 18px;text-decoration:none;font-size:14px;cursor:pointer;transition:.15s}
+  .btn{display:inline-block;background:#20262f;color:#e8eaf0;border:1px solid #313a48;border-radius:10px;padding:10px 18px;text-decoration:none;font-size:14px;cursor:pointer;transition:.15s;user-select:none}
   .btn:hover{background:#28303b;border-color:#3d4757}
   .btn.primary{background:#3b6ef0;border-color:#3b6ef0;color:#fff}
   .btn.primary:hover{background:#4b7bf5}
@@ -41,6 +41,12 @@
   a{color:#6f9bff;text-decoration:none}
   a:hover{text-decoration:underline}
   .ok{color:#4bd07f}
+  .err{color:#e05252}
+  .status{margin-top:14px;padding:10px 14px;border-radius:8px;font-size:13px;display:none}
+  .status.show{display:block}
+  .status.info{background:#0e1a2e;border:1px solid #1a3058;color:#6f9bff}
+  .status.error{background:#2a1010;border:1px solid #4a1818;color:#e05252}
+  .status.success{background:#0e2318;border:1px solid #235c3a;color:#4bd07f}
 </style>
 </head>
 <body>
@@ -52,16 +58,17 @@
   <div class="step">
     <div class="idx">STEP 1</div>
     <h2>Sign in to Google</h2>
-    <p>Use the account you want the trial on. Come back when you're done.</p>
-    <a class="btn" href="https://accounts.google.com/" target="_blank" rel="noopener">Sign in</a>
-    <span id="loginState" style="margin-left:12px;font-size:13px;color:#6d768a">not detected</span>
+    <p>Use the account you want the trial on. Come back when you're done.<br>
+    <span style="color:#6d768a;font-size:12px">Tip: If opening this page from a local file, "Sign in" may be blocked by the browser. Use the <a href="https://gylive.github.io/google-ultra/web/en.html" target="_blank">online version</a> instead, or right-click "Sign in" and open in a new tab.</span></p>
+    <a class="btn" id="loginBtn" href="javascript:void(0)">Sign in</a>
+    <span id="loginState" style="margin-left:12px;font-size:13px;color:#6d768a">checking...</span>
   </div>
 
   <div class="step">
     <div class="idx">STEP 2</div>
     <h2>Add a payment method</h2>
     <p>A card with $1 on it is enough. Nothing is charged during the trial. Skip if you already have one.</p>
-    <a class="btn" href="https://pay.google.com/gp/w/u/0/home/paymentmethods" target="_blank" rel="noopener">Add card</a>
+    <a class="btn" id="cardBtn" href="javascript:void(0)">Add card</a>
   </div>
 
   <div class="step">
@@ -93,16 +100,19 @@
     </div>
   </div>
 
+  <div id="statusBox" class="status"></div>
+
   <div class="note">
-    <b>Cancel before the trial ends.</b> Play → profile → Payments &amp; subscriptions → Subscriptions → Google One → Cancel. You keep the remaining trial time.<br><br>
-    <b>Seeing 400:</b> Google compares the fingerprint in the link with your User-Agent. This page builds it from your own browser, so it should be rare. Tick <b>Compatibility mode</b> and try again, or copy the link and open it in the browser where the target account is signed in.<br><br>
-    <b>"You're not eligible for a free trial":</b> the account has no trial left. You need a payment method attached and no active subscription. One trial per account — don't test on your main one.
+    <b>Cancel before the trial ends.</b> Play Store &rarr; profile &rarr; Payments &amp; subscriptions &rarr; Subscriptions &rarr; Google One &rarr; Cancel. You keep the remaining trial time.<br><br>
+    <b>Seeing 400:</b> The fingerprint in the link doesn't match your browser. Tick <b>Compatibility mode</b> and try again, or copy the link and open it in the browser where the target account is signed in.<br><br>
+    <b>Seeing "Server error":</b> Usually a temporary issue on Google's side. Wait a few minutes and try again. If it persists, try Chrome, use incognito mode, or tick Compatibility mode.<br><br>
+    <b>"You're not eligible for a free trial":</b> The account has no trial left. You need a payment method attached and no active subscription. One trial per account &mdash; don't test on your main one.
   </div>
 <div style="color:#4d5566;font-size:12px;margin-top:26px;line-height:1.8">For technical research and discussion only. No accounts or proxy purchasing are provided. You are responsible for anything you do with this tool.</div>
 </div>
 
 <script>
-/* ---------- 内置指纹（来自真实客户端，作兜底） ---------- */
+/* ---------- Built-in fingerprint (from a real client, used as fallback) ---------- */
 const FP_TEMPLATE = "W1tudWxsLG51bGwsbnVsbCxbbnVsbCxbIlJzMi4wLjY6OjpzMTExLDIsMjZiNWUxOSwwLDc2OSxhMDYzZWJlOSwwLDRhMixlZGQ5OGJhYywwLDE4LDQ4NjNmZDM1LDAsNzY5LGNiMmQ1YzZmLDAsNDdlLDZhZDQ3YzZjLDAsNTNlLDdiZGI0OWY2LDAsNDI4LGI2NTQwMjAwLDAsNzY5LGVlYTgyMGI2LDAsNDdlLDFhYTQzMzEsMCxcIldpbjMyLGY1NDY4M2YyLDAsXCJHb29nbGUgSW5jLixhZjc5NDUxNSwwLFwiNS4wIDI4V2luZG93cyBOVCAxMC4wM2IgV2luNjQzYiB4NjQyOSBBcHBsZVdlYktpdDJmNTM3LjM2IDI4S0hUTUwyYyBsaWtlIEdlY2tvMjkgQ2hyb21lMmYxMjUuMC4wLjAgU2FmYXJpMmY1MzcuMzYsZDgxNzIzZDEsMCxcImVuMmRVUyw1Y2MzYWI1ZiwwLFwiTW96aWxsYTJmNS4wIDI4V2luZG93cyBOVCAxMC4wM2IgV2luNjQzYiB4NjQyOSBBcHBsZVdlYktpdDJmNTM3LjM2IDI4S0hUTUwyYyBsaWtlIEdlY2tvMjkgQ2hyb21lMmYxMjUuMC4wLjAgU2FmYXJpMmY1MzcuMzYsMjRhNjZkZjYsMCwxMmMsXCJXZWQgRGVjIDMxIDE5NjkgMTlhMDAzYTAwIEdNVDJkMDUwMCAyOEVhc3Rlcm4gU3RhbmRhcmQgVGltZTI5LDJjYTA1NTRmLFwiUERGIFZpZXdlciwwLFwiUG9ydGFibGUgRG9jdW1lbnQgRm9ybWF0LFwiQ2hyb21lIFBERiBWaWV3ZXIsMCxcIlBvcnRhYmxlIERvY3VtZW50IEZvcm1hdCxcIkNocm9taXVtIFBERiBWaWV3ZXIsMCxcIlBvcnRhYmxlIERvY3VtZW50IEZvcm1hdCxcIk1pY3Jvc29mdCBFZGdlIFBERiBWaWV3ZXIsMCxcIlBvcnRhYmxlIERvY3VtZW50IEZvcm1hdCxcIldlYktpdCBidWlsdDJkaW4gUERGLDAsXCJQb3J0YWJsZSBEb2N1bWVudCBGb3JtYXQsNmM4YjlkNWIsNzcwYzY3ZmMsMCwwOmEyMSwzLDFhMWRkYzkzMmQ0LDAsODQsMTphNDAsXCJmLDFhMWRkYzkzMmQ1Il0sIk1vemlsbGEvNS4wIChXaW5kb3dzIE5UIDEwLjA7IFdpbjY0OyB4NjQpIEFwcGxlV2ViS2l0LzUzNy4zNiAoS0hUTUwsIGxpa2UgR2Vja28pIENocm9tZS8xMjUuMC4wLjAgU2FmYXJpLzUzNy4zNiIsImh0dHBzOi8vcGF5bWVudHMuZ29vZ2xlLmNvbSJdLG51bGwsbnVsbCwiZW4iLDEsMV0sWyJodHRwczovL3BheW1lbnRzLmdvb2dsZS5jb20vcGF5bWVudHMvcmVkaXJlY3RfZm9ybV9sYW5kaW5nP3N1Y2Nlc3M9dHJ1ZSIsImh0dHBzOi8vcGF5bWVudHMuZ29vZ2xlLmNvbS9wYXltZW50cy9yZWRpcmVjdF9mb3JtX2xhbmRpbmc/c3VjY2Vzcz1mYWxzZSJdXQ==";
 
 const PATH = "/plans?g1_last_touchpoint=37&g1_landing_page=1&otzr=1";
@@ -111,35 +121,28 @@ const OFFERS = {
   "30tb": { sku: "g1.play.ai.pro",  token: "AYrTWi7nBQ2Zn0z4s+QJOwg9kQRwH3+z+HXpzRqw9IIU4/C48vPvjH32Bub8SHrWq3YX+yI4g1wJgviYiLCobJNqc9DqRd9WZnDdaQ==" }
 };
 
-/* 把 / - ; ( ) , : 换成客户端内部用的两字节编码 */
 function enc(s) {
   return s.replace(/\//g, "2f").replace(/-/g, "2d").replace(/;/g, "3b")
           .replace(/\(/g, "28").replace(/\)/g, "29").replace(/,/g, "2c")
           .replace(/:/g, "3a");
 }
 
-/* 用当前浏览器的真实信息重建指纹 */
 function buildFingerprint() {
   try {
     const raw = atob(FP_TEMPLATE);
     const ua = navigator.userAgent;
     const plat = /Mac/.test(navigator.platform) ? "MacIntel"
                : /Win/.test(navigator.platform) ? "Win32" : navigator.platform || "Linux x86_64";
-    const tz = new Date(0).toString();              // Wed Dec 31 1969 16:00:00 GMT-0800 (Pacific Standard Time)
+    const tz = new Date(0).toString();
     const lang = navigator.language || "en";
 
     let s = raw;
-    // 明文 UA（尾部）
     s = s.split("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36").join(ua);
-    // 摘要里的平台
     s = s.split('\\"Win32').join('\\"' + plat);
-    // 摘要里的 UA（已编码）
     s = s.split("5.0 28Windows NT 10.03b Win643b x6429 AppleWebKit2f537.36 28KHTML2c like Gecko29 Chrome2f125.0.0.0 Safari2f537.36")
          .join(enc(ua.replace(/^Mozilla\//, "")));
-    // 时区串
     s = s.split("Wed Dec 31 1969 193a003a00 GMT2d0500 28Eastern Standard Time29")
          .join(enc(tz));
-    // 语言
     s = s.split('"en",1,1').join('"' + lang + '",1,1');
 
     return btoa(s);
@@ -167,9 +170,35 @@ function buildUrl(key, legacy) {
     + encodeURIComponent(JSON.stringify(ear)) + gapi;
 }
 
-/* ---------- 交互 ---------- */
+function showStatus(msg, type) {
+  const box = document.getElementById("statusBox");
+  box.textContent = msg;
+  box.className = "status show " + type;
+  if (type !== "error") setTimeout(() => { box.className = "status"; }, 5000);
+}
+
+function safeOpen(url) {
+  const w = window.open(url, "_blank");
+  if (!w || w.closed) {
+    showStatus("Popup blocked by your browser. Please allow popups for this page, or right-click and open the link in a new tab. If opening from a local file, use the online version instead.", "error");
+    return false;
+  }
+  return true;
+}
+
+/* ---------- Interaction ---------- */
 let lastUrl = "";
 const panel = document.getElementById("panel");
+
+document.getElementById("loginBtn").addEventListener("click", function(e) {
+  e.preventDefault();
+  safeOpen("https://accounts.google.com/");
+});
+
+document.getElementById("cardBtn").addEventListener("click", function(e) {
+  e.preventDefault();
+  safeOpen("https://pay.google.com/gp/w/u/0/home/paymentmethods");
+});
 
 document.querySelectorAll(".plan").forEach(el => {
   el.addEventListener("click", () => {
@@ -178,35 +207,51 @@ document.querySelectorAll(".plan").forEach(el => {
     document.getElementById("link").textContent = lastUrl;
     document.getElementById("panelTitle").textContent =
       (el.dataset.key === "20tb" ? "Ultra 20 TB · 12 months" : "Ultra 30 TB · 1 month")
-      + (legacy ? " — compatibility mode" : " — fingerprint built from your browser");
+      + (legacy ? " (compatibility mode)" : " (fingerprint built from your browser)");
     panel.classList.add("show");
-    window.open(lastUrl, "_blank");
+
+    if (!safeOpen(lastUrl)) {
+      showStatus("Link generated but popup was blocked. Click 'Open' below, or copy the link and paste it in a new tab.", "error");
+    }
   });
 });
 
 document.getElementById("open").addEventListener("click", () => {
-  if (lastUrl) window.open(lastUrl, "_blank");
+  if (lastUrl) safeOpen(lastUrl);
 });
 
 document.getElementById("copy").addEventListener("click", () => {
   const btn = document.getElementById("copy");
+  if (!lastUrl) return;
   navigator.clipboard.writeText(lastUrl).then(() => {
-    btn.textContent = "已复制";
-    setTimeout(() => { btn.textContent = "复制链接"; }, 1500);
+    btn.textContent = "Copied!";
+    showStatus("Link copied. If the popup didn't open, paste it in a new tab.", "info");
+    setTimeout(() => { btn.textContent = "Copy link"; }, 2000);
+  }).catch(() => {
+    prompt("Copy the link below:", lastUrl);
   });
 });
 
-/* 顺手探测一下有没有登录过谷歌 */
+/* Probe login status */
 (function probe() {
   const el = document.getElementById("loginState");
   fetch("https://accounts.google.com/ListAccounts?gpsia=1&source=ChromiumBrowser&json=standard", { credentials: "include" })
     .then(r => r.json())
     .then(d => {
       const n = (d && d[1] && d[1].length) || 0;
-      if (n > 0) el.innerHTML = '<span class="ok">signed in</span>';
-      else el.textContent = "not signed in";
+      if (n > 0) {
+        el.innerHTML = '<span class="ok">signed in</span>';
+      } else {
+        el.textContent = "not signed in";
+      }
     })
-    .catch(() => { el.textContent = "not signed in"; });
+    .catch(() => {
+      if (location.protocol === "file:") {
+        el.innerHTML = 'cannot detect (local file mode)<br><span style="font-size:11px;color:#555">Try the <a href="https://gylive.github.io/google-ultra/web/en.html">online version</a></span>';
+      } else {
+        el.textContent = "not signed in";
+      }
+    });
 })();
 </script>
 </body>
