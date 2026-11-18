@@ -60,7 +60,10 @@ REPORT_DIR = Path("ultra0-report")
 
 ADB_CANDIDATES = [
     os.path.expanduser("~/Library/Android/sdk/platform-tools/adb"),
-    "/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb", "adb",
+    "/opt/homebrew/bin/adb", "/usr/local/bin/adb", "/usr/bin/adb",
+    r"D:\MuMuPlayerGlobal\nx_main\adb.exe",
+    os.path.expanduser(r"~\AppData\Local\Android\Sdk\platform-tools\adb.exe"),
+    "adb",
 ]
 
 
@@ -121,6 +124,11 @@ def ensure_root():
     except Exception:
         uid = ""
     if "uid=0" not in uid:
+        try:
+            uid = sh("shell", "id", timeout=15)
+        except Exception:
+            uid = ""
+    if "uid=0" not in uid:
         sys.exit("❌ 设备没有 root 权限，脚本需要 root 才能注入。")
 
 
@@ -136,15 +144,22 @@ def ensure_frida_server():
             ver = frida.__version__
         except Exception:
             sys.exit("❌ 电脑没装 frida。请先执行：pip3 install frida")
+        abi = sh("shell", "getprop ro.product.cpu.abi").strip()
+        abi_map = {"arm64-v8a": "arm64", "armeabi-v7a": "arm", "x86_64": "x86_64", "x86": "x86"}
+        frida_arch = abi_map.get(abi, "arm64")
         url = (f"https://github.com/frida/frida/releases/download/{ver}/"
-               f"frida-server-{ver}-android-arm64.xz")
-        tmp = Path("/tmp/frida-server.xz")
+               f"frida-server-{ver}-android-{frida_arch}.xz")
+        import tempfile
+        tmp = Path(tempfile.gettempdir()) / "frida-server.xz"
         subprocess.run(["curl", "-L", "-o", str(tmp), url], check=True)
         subprocess.run(["xz", "-d", "-f", str(tmp)], check=True)
-        raw = Path("/tmp/frida-server")
+        raw = Path(tempfile.gettempdir()) / "frida-server"
         sh("push", str(raw), FRIDA_REMOTE, timeout=120)
         sh("shell", f"chmod 755 {FRIDA_REMOTE}")
-    sh("shell", f"su -c 'nohup {FRIDA_REMOTE} -D >/dev/null 2>&1 &'", timeout=15)
+    try:
+        sh("shell", f"su -c 'nohup {FRIDA_REMOTE} -D >/dev/null 2>&1 &'", timeout=15)
+    except Exception:
+        sh("shell", f"nohup {FRIDA_REMOTE} -D >/dev/null 2>&1 &", timeout=15)
     for _ in range(20):
         time.sleep(0.5)
         if "frida-server" in sh("shell", "ps -A | grep frida-server || true"):
@@ -158,7 +173,8 @@ def ensure_module_apk():
         ok("计费模块已就位")
         return
     note("正在推送计费模块（一次性）…")
-    tmp = Path("/tmp/module_521.apk")
+    import tempfile
+    tmp = Path(tempfile.gettempdir()) / "module_521.apk"
     tmp.write_bytes(base64.b64decode(MODULE_B64))
     sh("push", str(tmp), MODULE_REMOTE, timeout=120)
     ok("计费模块已推送")
@@ -428,7 +444,10 @@ def build_js(plan: str = "auto") -> str:
 def run_trial(pid: int, wait=90, plan="auto") -> dict:
     import frida
     step("注入计费模块，查询免费试用")
-    dev = frida.get_usb_device(timeout=10)
+    if SERIAL:
+        dev = frida.get_device(SERIAL, timeout=10)
+    else:
+        dev = frida.get_usb_device(timeout=10)
     sess = dev.attach(pid)
     res = {"offers": [], "launched": None, "purchase": None, "errors": []}
 
